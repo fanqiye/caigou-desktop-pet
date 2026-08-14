@@ -1,0 +1,15 @@
+# Runtime state and diagnostics
+state.json
+*.log
+
+# Local history and obsolete builds
+backup-before-*/
+assets/
+菜狗动态桌宠.ps1
+
+# Windows/editor noise
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+

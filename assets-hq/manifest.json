@@ -1,0 +1,133 @@
+{
+  "failed": {
+    "intervalMs": 340,
+    "frames": [
+      "failed/frame-00.png",
+      "failed/frame-01.png",
+      "failed/frame-02.png",
+      "failed/frame-03.png",
+      "failed/frame-04.png",
+      "failed/frame-05.png",
+      "failed/frame-06.png",
+      "failed/frame-07.png"
+    ]
+  },
+  "feeding": {
+    "intervalMs": 430,
+    "frames": [
+      "feeding/frame-00.png",
+      "feeding/frame-01.png",
+      "feeding/frame-02.png",
+      "feeding/frame-03.png",
+      "feeding/frame-04.png",
+      "feeding/frame-05.png"
+    ]
+  },
+  "idle": {
+    "intervalMs": 320,
+    "frames": [
+      "idle/frame-00.png",
+      "idle/frame-01.png",
+      "idle/frame-02.png",
+      "idle/frame-03.png",
+      "idle/frame-04.png",
+      "idle/frame-05.png"
+    ]
+  },
+  "jumping": {
+    "intervalMs": 180,
+    "frames": [
+      "jumping/frame-00.png",
+      "jumping/frame-01.png",
+      "jumping/frame-02.png",
+      "jumping/frame-03.png",
+      "jumping/frame-04.png"
+    ]
+  },
+  "petting": {
+    "intervalMs": 360,
+    "frames": [
+      "petting/frame-00.png",
+      "petting/frame-01.png",
+      "petting/frame-02.png",
+      "petting/frame-03.png",
+      "petting/frame-04.png",
+      "petting/frame-05.png"
+    ]
+  },
+  "review": {
+    "intervalMs": 340,
+    "frames": [
+      "review/frame-00.png",
+      "review/frame-01.png",
+      "review/frame-02.png",
+      "review/frame-03.png",
+      "review/frame-04.png",
+      "review/frame-05.png"
+    ]
+  },
+  "running-left": {
+    "intervalMs": 105,
+    "frames": [
+      "running-left/frame-00.png",
+      "running-left/frame-01.png",
+      "running-left/frame-02.png",
+      "running-left/frame-03.png",
+      "running-left/frame-04.png",
+      "running-left/frame-05.png",
+      "running-left/frame-06.png",
+      "running-left/frame-07.png"
+    ]
+  },
+  "running-right": {
+    "intervalMs": 105,
+    "frames": [
+      "running-right/frame-00.png",
+      "running-right/frame-01.png",
+      "running-right/frame-02.png",
+      "running-right/frame-03.png",
+      "running-right/frame-04.png",
+      "running-right/frame-05.png",
+      "running-right/frame-06.png",
+      "running-right/frame-07.png"
+    ]
+  },
+  "running": {
+    "intervalMs": 120,
+    "frames": [
+      "running/frame-00.png",
+      "running/frame-01.png",
+      "running/frame-02.png",
+      "running/frame-03.png",
+      "running/frame-04.png",
+      "running/frame-05.png"
+    ]
+  },
+  "sleeping": {
+    "intervalMs": 1500,
+    "frames": [
+      "sleeping/frame-00.png",
+      "sleeping/frame-01.png"
+    ]
+  },
+  "waiting": {
+    "intervalMs": 340,
+    "frames": [
+      "waiting/frame-00.png",
+      "waiting/frame-01.png",
+      "waiting/frame-02.png",
+      "waiting/frame-03.png",
+      "waiting/frame-04.png",
+      "waiting/frame-05.png"
+    ]
+  },
+  "waving": {
+    "intervalMs": 260,
+    "frames": [
+      "waving/frame-00.png",
+      "waving/frame-01.png",
+      "waving/frame-02.png",
+      "waving/frame-03.png"
+    ]
+  }
+}
