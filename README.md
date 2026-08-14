@@ -52,9 +52,10 @@
 - 本轮生命系统与现代面板改造前备份：`backup-before-life-ui-follow-20260814`。
 - 旧版主程序仍保留为 `菜狗动态桌宠.ps1`，此前备份仍保留在各 `backup-before-*` 目录中。
 
-## GitHub 同步
+## GitHub 公开下载与同步
 
-- 私有仓库：`https://github.com/fanqiye/caigou-desktop-pet`
+- 公开仓库：`https://github.com/fanqiye/caigou-desktop-pet`
+- 最新可下载版本：`https://github.com/fanqiye/caigou-desktop-pet/releases/latest`
 - 每次更新通过 `tests\test-caigou-dynamic.ps1` 后，运行 `同步到GitHub.ps1 -Message "更新摘要"`。
-- 同步脚本会自动提交、拉取并推送；测试失败时不会上传。
+- 同步脚本会自动提交、拉取并推送；测试失败时不会上传。推送到 `main` 后，GitHub Actions 会再次测试并自动生成公开 ZIP Release。
 - `state.json`、运行日志、旧版程序和 `backup-before-*` 只保留在本机，不会上传到 GitHub。

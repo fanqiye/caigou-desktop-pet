@@ -1,0 +1,55 @@
+name: 发布可下载版本
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: caigou-public-release
+  cancel-in-progress: false
+
+jobs:
+  test-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: 检出公开源码
+        uses: actions/checkout@v4
+
+      - name: 运行桌宠自检
+        shell: pwsh
+        run: .\tests\test-caigou-dynamic.ps1
+
+      - name: 打包可下载版本
+        id: package
+        shell: pwsh
+        run: |
+          $shortSha = '${{ github.sha }}'.Substring(0, 7)
+          $packageRoot = Join-Path $env:RUNNER_TEMP 'caigou-desktop-pet'
+          $zipPath = Join-Path $env:RUNNER_TEMP "caigou-desktop-pet-$shortSha.zip"
+          New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
+          Copy-Item -LiteralPath '.\菜狗现代桌宠.ps1', '.\启动动态菜狗.vbs', '.\design-tokens.json', '.\README.md' -Destination $packageRoot
+          Copy-Item -LiteralPath '.\assets-hq' -Destination $packageRoot -Recurse
+          Compress-Archive -Path (Join-Path $packageRoot '*') -DestinationPath $zipPath -CompressionLevel Optimal
+          "short_sha=$shortSha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "tag_name=build-$shortSha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "zip_path=$zipPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: 创建公开下载版本
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.package.outputs.tag_name }}
+          SHORT_SHA: ${{ steps.package.outputs.short_sha }}
+          ZIP_PATH: ${{ steps.package.outputs.zip_path }}
+        run: |
+          gh release create $env:RELEASE_TAG "$env:ZIP_PATH#caigou-desktop-pet-$env:SHORT_SHA.zip" `
+            --repo '${{ github.repository }}' `
+            --target '${{ github.sha }}' `
+            --title "菜狗桌宠 $env:SHORT_SHA" `
+            --notes "由 main 分支提交 ${{ github.sha }} 自动测试并打包。下载 ZIP，解压后双击 启动动态菜狗.vbs 即可运行。"
+
