@@ -18,7 +18,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: 检出公开源码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
 
       - name: 运行桌宠自检
         shell: pwsh
@@ -52,4 +52,3 @@ jobs:
             --target '${{ github.sha }}' `
             --title "菜狗桌宠 $env:SHORT_SHA" `
             --notes "由 main 分支提交 ${{ github.sha }} 自动测试并打包。下载 ZIP，解压后双击 启动动态菜狗.vbs 即可运行。"
-
