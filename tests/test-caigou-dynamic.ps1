@@ -50,6 +50,7 @@ if ($errors.Count -gt 0) {
 $output = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -STA -File $scriptPath -SelfTest 2>&1 | Out-String
 $requiredMarkers = @(
     'SELF_TEST_OK','renderer=WPF','hqFrames=True','modernFeedback=True','modernPanel=True','hoverPanel=True',
+    'feedbackAvoidance=True','cleanHoverHint=True','staminaRecovery=True',
     'ambientRoutines=33','ambientVariety=True','naturalSchedule=True','naturalStart=True',
     'staticRest=True','interactions=3','interactionLogic=True','affectionCanDecrease=True',
     'lifeSystem=True','departureReachable=True','followMode=True','nudgeWindow=True','persistence=True'

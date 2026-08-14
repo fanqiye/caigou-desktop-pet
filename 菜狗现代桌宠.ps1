@@ -216,6 +216,7 @@ try {
     $particleCanvas.IsHitTestVisible = $false
     [void]$root.Children.Add($particleCanvas)
 
+    $controlWindow = $null
     $feedbackWindow = [Windows.Window]::new()
     $feedbackWindow.Title = '菜狗反馈'
     $feedbackWindow.WindowStyle = [Windows.WindowStyle]::None
@@ -381,6 +382,39 @@ try {
     $feedbackTimer = [Windows.Threading.DispatcherTimer]::new()
     $feedbackTimer.Add_Tick({ $feedbackTimer.Stop(); $feedbackWindow.Hide() })
 
+    $positionFeedbackWindow = {
+        if (-not $feedbackWindow.IsVisible) { return }
+        $feedbackWindow.UpdateLayout()
+        $area = [Windows.SystemParameters]::WorkArea
+        $feedbackWidth = $feedbackWindow.ActualWidth
+        $feedbackHeight = $feedbackWindow.ActualHeight
+
+        if ($null -ne $controlWindow -and $controlWindow.IsVisible) {
+            $panelWidth = $controlWindow.ActualWidth
+            $panelHeight = $controlWindow.ActualHeight
+            $panelRect = [Windows.Rect]::new($controlWindow.Left, $controlWindow.Top, $panelWidth, $panelHeight)
+            $oppositeX = if ($controlWindow.Left -lt $window.Left) { $window.Left + $window.Width + 12 } else { $window.Left - $feedbackWidth - 12 }
+            $candidates = @(
+                [Windows.Point]::new($controlWindow.Left + $panelWidth - $feedbackWidth, $controlWindow.Top - $feedbackHeight - 10),
+                [Windows.Point]::new($oppositeX, $window.Top - $feedbackHeight + 48),
+                [Windows.Point]::new($controlWindow.Left + $panelWidth - $feedbackWidth, $controlWindow.Top + $panelHeight + 10)
+            )
+            foreach ($candidate in $candidates) {
+                $candidateRect = [Windows.Rect]::new($candidate.X, $candidate.Y, $feedbackWidth, $feedbackHeight)
+                $insideArea = ($candidateRect.Left -ge $area.Left -and $candidateRect.Right -le $area.Right -and $candidateRect.Top -ge $area.Top -and $candidateRect.Bottom -le $area.Bottom)
+                if ($insideArea -and -not $candidateRect.IntersectsWith($panelRect)) {
+                    $feedbackWindow.Left = $candidate.X
+                    $feedbackWindow.Top = $candidate.Y
+                    return
+                }
+            }
+        }
+
+        $left = $window.Left + $window.Width - $feedbackWidth
+        $feedbackWindow.Left = [Math]::Min([Math]::Max($left, $area.Left), $area.Right - $feedbackWidth)
+        $feedbackWindow.Top = [Math]::Max($area.Top, $window.Top - $feedbackHeight - 8)
+    }
+
     $newBadge = {
         param([string]$Text, [string]$Tone)
         $palette = switch ($Tone) {
@@ -445,10 +479,7 @@ try {
 
         if (-not $feedbackWindow.IsVisible) { $feedbackWindow.Show() }
         $feedbackWindow.UpdateLayout()
-        $area = [Windows.SystemParameters]::WorkArea
-        $left = $window.Left + $window.Width - $feedbackWindow.ActualWidth
-        $feedbackWindow.Left = [Math]::Min([Math]::Max($left, $area.Left), $area.Right - $feedbackWindow.ActualWidth)
-        $feedbackWindow.Top = [Math]::Max($area.Top, $window.Top - $feedbackWindow.ActualHeight - 8)
+        & $positionFeedbackWindow
         $feedbackWindow.Opacity = 0
         $feedbackTransform.Y = 8
         $opacityAnimation = [Windows.Media.Animation.DoubleAnimation]::new(0, 1, [Windows.Duration]::new([TimeSpan]::FromMilliseconds([double]$tokens.component.'motion-normal-ms')))
@@ -986,7 +1017,7 @@ try {
             $script:energy = [Math]::Min(100, $script:energy + 2)
         } elseif ($script:activityPhase -eq 'active' -or $script:followMode) {
             $script:energy = [Math]::Max(0, $script:energy - 1)
-        } elseif ($script:energy -lt 65) {
+        } elseif ($script:energy -lt 100) {
             $script:energy = [Math]::Min(100, $script:energy + 1)
         }
 
@@ -1048,7 +1079,6 @@ try {
         }
     })
 
-    $controlWindow = $null
     $absenceWindow = $null
     $updateControlPanel = {}
 
@@ -1345,7 +1375,11 @@ try {
         $left = $window.Left - $controlWindow.ActualWidth - 10
         if ($left -lt $area.Left) { $left = $window.Left + $window.Width + 10 }
         $controlWindow.Left = [Math]::Min([Math]::Max($left,$area.Left),$area.Right-$controlWindow.ActualWidth)
-        $controlWindow.Top = [Math]::Min([Math]::Max($window.Top-$controlWindow.ActualHeight+80,$area.Top),$area.Bottom-$controlWindow.ActualHeight)
+        $minimumTopWithBubbleRoom = $area.Top + 116
+        $maximumTop = $area.Bottom - $controlWindow.ActualHeight
+        $minimumTop = if ($maximumTop -ge $minimumTopWithBubbleRoom) { $minimumTopWithBubbleRoom } else { $area.Top }
+        $controlWindow.Top = [Math]::Min([Math]::Max($window.Top-$controlWindow.ActualHeight+80,$minimumTop),$maximumTop)
+        if ($feedbackWindow.IsVisible) { & $positionFeedbackWindow }
         $script:panelOutsideSince = [datetime]::MinValue
         $script:panelGraceUntil = (Get-Date).AddMilliseconds($(if($FromFollowDwell){2600}else{650}))
     }
@@ -1515,7 +1549,6 @@ try {
     $statusTimer.Interval = [TimeSpan]::FromSeconds(1)
     $statusTimer.Add_Tick({ if($script:petStatus -ne 'home' -and -not $script:statusHandled){ & $showAbsence } })
 
-    $petImage.ToolTip = '悬停打开生活面板 · 左键直接互动 · 双击聊天'
     $petImage.Add_MouseEnter({
         $duration = [Windows.Duration]::new([TimeSpan]::FromMilliseconds([double]$tokens.component.'motion-fast-ms'))
         $petScale.BeginAnimation([Windows.Media.ScaleTransform]::ScaleXProperty, [Windows.Media.Animation.DoubleAnimation]::new($petScale.ScaleX, 1.025, $duration))
@@ -1643,6 +1676,12 @@ try {
             $script:followMode = $false
             & $showControlPanel
             $normalHoverPanelOk = $controlWindow.IsVisible
+            & $showFeedback '测试反馈' '语言框应避开生活面板。' 'neutral' 0 0 0 800
+            $feedbackRect = [Windows.Rect]::new($feedbackWindow.Left, $feedbackWindow.Top, $feedbackWindow.ActualWidth, $feedbackWindow.ActualHeight)
+            $panelRect = [Windows.Rect]::new($controlWindow.Left, $controlWindow.Top, $controlWindow.ActualWidth, $controlWindow.ActualHeight)
+            $feedbackAvoidanceOk = (-not $feedbackRect.IntersectsWith($panelRect))
+            $cleanHoverHintOk = ($null -eq $petImage.ToolTip)
+            $feedbackTimer.Stop(); $feedbackWindow.Hide()
             & $hideControlPanel
             $script:followMode = $true
             & $showControlPanel
@@ -1662,6 +1701,22 @@ try {
                     if (-not $script:frames.ContainsKey([string]$planStep.State)) { $ambientPlansOk = $false; break }
                 }
             }
+            $script:lastInteraction = Get-Date
+            $script:lastBondDecay = Get-Date
+            $script:petStatus = 'home'
+            $script:fullness = 60
+            $script:affection = 60
+            $script:followMode = $false
+            $script:activityPhase = 'quiet'
+            $script:currentState = 'idle'
+            $script:energy = 70
+            & $applyNeedsTick
+            $quietRecoveryOk = ($script:energy -eq 71)
+            $script:currentState = 'sleeping'
+            $script:energy = 70
+            & $applyNeedsTick
+            $sleepRecoveryOk = ($script:energy -eq 72)
+            $staminaRecoveryOk = ($quietRecoveryOk -and $sleepRecoveryOk)
             $script:affection = 40
             $script:fullness = 50
             $script:energy = 70
@@ -1736,7 +1791,7 @@ try {
             $followTimer.Stop()
             $nudgeWindowOk = ($script:nextNudgeAt -gt (Get-Date).AddMinutes(39))
             $persistenceOk = $statePath.EndsWith('state.json')
-            $script:selfTestResult = "SELF_TEST_OK renderer=WPF hqFrames=$hqFramesOk modernFeedback=$modernFeedbackOk modernPanel=$modernPanelOk hoverPanel=$hoverPanelOk ambientRoutines=$($allAmbientNames.Count) ambientVariety=$ambientPlansOk naturalSchedule=$naturalScheduleOk naturalStart=$naturalStartOk staticRest=$staticRestOk interactions=$baseInteractions interactionLogic=$interactionOk affectionCanDecrease=$affectionCanDecrease lifeSystem=$lifeSystemOk departureReachable=$departureReachable followMode=$followModeOk nudgeWindow=$nudgeWindowOk persistence=$persistenceOk"
+            $script:selfTestResult = "SELF_TEST_OK renderer=WPF hqFrames=$hqFramesOk modernFeedback=$modernFeedbackOk modernPanel=$modernPanelOk hoverPanel=$hoverPanelOk feedbackAvoidance=$feedbackAvoidanceOk cleanHoverHint=$cleanHoverHintOk staminaRecovery=$staminaRecoveryOk ambientRoutines=$($allAmbientNames.Count) ambientVariety=$ambientPlansOk naturalSchedule=$naturalScheduleOk naturalStart=$naturalStartOk staticRest=$staticRestOk interactions=$baseInteractions interactionLogic=$interactionOk affectionCanDecrease=$affectionCanDecrease lifeSystem=$lifeSystemOk departureReachable=$departureReachable followMode=$followModeOk nudgeWindow=$nudgeWindowOk persistence=$persistenceOk"
             $window.Close()
         })
         $testTimer.Start()
