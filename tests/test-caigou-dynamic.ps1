@@ -37,7 +37,7 @@ if (Test-Path -LiteralPath $manifestPath) {
 
 if (Test-Path -LiteralPath $scriptPath) {
     $scriptText = Get-Content -Raw -LiteralPath $scriptPath
-    foreach ($feature in 'state.json','petting','feeding','sleeping','feedbackCard','nextNudgeAt','ignoredNudges','petCooldownUntil','lastBondDecay','affectionCanDecrease','BitmapScalingMode','assets-hq','ambientRoutineNames','ambientTimer','activityPhase','cursor-curious','dream-twitch','wake-stretch','holdState','health','stamina','petStatus','departureReason','controlWindow','quickWindow','followMode','stopFollowing','returnHomeMode') {
+    foreach ($feature in 'state.json','petting','feeding','sleeping','feedbackCard','nextNudgeAt','ignoredNudges','petCooldownUntil','lastBondDecay','affectionCanDecrease','BitmapScalingMode','assets-hq','ambientRoutineNames','ambientTimer','activityPhase','cursor-curious','dream-twitch','wake-stretch','holdState','health','stamina','petStatus','departureReason','controlWindow','panelPresenceTimer','showControlPanel','followDwellSince','followMode','stopFollowing','returnHomeMode') {
         if ($scriptText -notmatch [regex]::Escape($feature)) { $errors.Add("缺少成熟互动机制：$feature") }
     }
 }
@@ -49,7 +49,7 @@ if ($errors.Count -gt 0) {
 
 $output = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -STA -File $scriptPath -SelfTest 2>&1 | Out-String
 $requiredMarkers = @(
-    'SELF_TEST_OK','renderer=WPF','hqFrames=True','modernFeedback=True','modernPanel=True',
+    'SELF_TEST_OK','renderer=WPF','hqFrames=True','modernFeedback=True','modernPanel=True','hoverPanel=True',
     'ambientRoutines=33','ambientVariety=True','naturalSchedule=True','naturalStart=True',
     'staticRest=True','interactions=3','interactionLogic=True','affectionCanDecrease=True',
     'lifeSystem=True','departureReachable=True','followMode=True','nudgeWindow=True','persistence=True'
@@ -64,4 +64,3 @@ if ($LASTEXITCODE -ne 0 -or $errors.Count -gt 0) {
 }
 
 Write-Output 'CAIGOU_DYNAMIC_TEST_OK'
-

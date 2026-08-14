@@ -278,6 +278,10 @@ try {
     $script:followMode = $false
     $script:returnHomeMode = $false
     $script:lastFollowCostAt = Get-Date
+    $script:followDwellAnchor = $null
+    $script:followDwellSince = [datetime]::MinValue
+    $script:panelOutsideSince = [datetime]::MinValue
+    $script:panelGraceUntil = [datetime]::MinValue
     $script:statusHandled = $false
     $script:nudgeActive = $false
     $script:petStreak = 0
@@ -1045,7 +1049,6 @@ try {
     })
 
     $controlWindow = $null
-    $quickWindow = $null
     $absenceWindow = $null
     $updateControlPanel = {}
 
@@ -1116,8 +1119,11 @@ try {
         $script:followMode = $true
         $script:returnHomeMode = $false
         $script:lastFollowCostAt = Get-Date
+        $script:followDwellAnchor = $null
+        $script:followDwellSince = [datetime]::MinValue
+        if ($null -ne $controlWindow -and $controlWindow.IsVisible) { $controlWindow.Hide() }
         $followTimer.Start()
-        & $showFeedback '开始陪着你' '我会一直跟在鼠标旁边；右键打开面板可随时停止。' 'positive' 0 0 0 3200
+        & $showFeedback '开始陪着你' '移动时不会打扰；停在同一区域 5 秒会出现面板，可随时停止跟随。' 'positive' 0 0 0 3600
         & $updateControlPanel
     }
 
@@ -1126,6 +1132,8 @@ try {
         $wasFollowing = $script:followMode
         $script:followMode = $false
         $script:returnHomeMode = $true
+        $script:followDwellAnchor = $null
+        $script:followDwellSince = [datetime]::MinValue
         $followTimer.Start()
         if ($wasFollowing -and -not $Silent) { & $showFeedback '回窝待着' '不再跟随鼠标，我自己跑回右下角。' 'neutral' 0 0 0 2800 }
         & $updateControlPanel
@@ -1134,6 +1142,8 @@ try {
     $returnHome = {
         $script:followMode = $false
         $script:returnHomeMode = $true
+        $script:followDwellAnchor = $null
+        $script:followDwellSince = [datetime]::MinValue
         $followTimer.Start()
         & $updateControlPanel
     }
@@ -1273,10 +1283,9 @@ try {
     $actionGrid.Children.Add($followTile) | Out-Null
 
     $controlGrid = [Windows.Controls.Primitives.UniformGrid]::new()
-    $controlGrid.Columns = 2
+    $controlGrid.Columns = 3
     $controlGrid.Margin = [Windows.Thickness]::new(0,8,0,0)
     $controlStack.Children.Add($controlGrid) | Out-Null
-    $controlGrid.Children.Add((& $newActionTile '查看状态' '' { & $showStatus; & $updateControlPanel } 'neutral' 38)) | Out-Null
     $controlGrid.Children.Add((& $newActionTile '回右下角' '' { & $returnHome; $controlWindow.Hide() } 'neutral' 38)) | Out-Null
     $quietTile = & $newActionTile '安静模式' '' {
         $script:autoMood = -not $script:autoMood
@@ -1321,65 +1330,106 @@ try {
         }
         $controlStatusText.Text = if ($script:followMode) { '正在陪着鼠标走' } elseif ($script:returnHomeMode) { '正在自己跑回窝' } else { switch($script:activityPhase){ 'sleep' {'熟睡中，动作暂停'} 'active' {'短暂活跃'} default {'安静清醒'} } }
         $followTileText.Text = if ($script:followMode) { '停止跟随' } else { '跟着鼠标' }
-        if ($null -ne $quickFollowText) { $quickFollowText.Text = if ($script:followMode) { '停止' } else { '跟随' } }
         $quietTileText.Text = if ($script:autoMood) { '安静模式' } else { '恢复提醒' }
         $controlCard.BorderBrush = & $brush $(if($script:health -le 20){$color.Health}else{$color.SurfaceBorder})
     }
 
-    $toggleControlPanel = {
+    $showControlPanel = {
+        param([switch]$FromFollowDwell)
         if ($script:petStatus -ne 'home') { return }
-        if ($controlWindow.IsVisible) { $controlWindow.Hide(); return }
-        if ($null -ne $quickWindow) { $quickWindow.Hide() }
+        if ($script:followMode -and -not $FromFollowDwell) { return }
         & $updateControlPanel
-        $controlWindow.Show()
+        if (-not $controlWindow.IsVisible) { $controlWindow.Show() }
         $controlWindow.UpdateLayout()
         $area = [Windows.SystemParameters]::WorkArea
         $left = $window.Left - $controlWindow.ActualWidth - 10
         if ($left -lt $area.Left) { $left = $window.Left + $window.Width + 10 }
         $controlWindow.Left = [Math]::Min([Math]::Max($left,$area.Left),$area.Right-$controlWindow.ActualWidth)
         $controlWindow.Top = [Math]::Min([Math]::Max($window.Top-$controlWindow.ActualHeight+80,$area.Top),$area.Bottom-$controlWindow.ActualHeight)
+        $script:panelOutsideSince = [datetime]::MinValue
+        $script:panelGraceUntil = (Get-Date).AddMilliseconds($(if($FromFollowDwell){2600}else{650}))
     }
 
-    $quickWindow = [Windows.Window]::new()
-    $quickWindow.Title = '菜狗快捷互动'
-    $quickWindow.WindowStyle = [Windows.WindowStyle]::None
-    $quickWindow.ResizeMode = [Windows.ResizeMode]::NoResize
-    $quickWindow.AllowsTransparency = $true
-    $quickWindow.Background = [Windows.Media.Brushes]::Transparent
-    $quickWindow.ShowInTaskbar = $false
-    $quickWindow.Topmost = $true
-    $quickWindow.ShowActivated = $false
-    $quickWindow.SizeToContent = [Windows.SizeToContent]::WidthAndHeight
-    $quickCard = [Windows.Controls.Border]::new()
-    $quickCard.CornerRadius = [Windows.CornerRadius]::new([double]$tokens.component.'quickbar-radius')
-    $quickCard.Background = & $brush $color.SurfaceGlass
-    $quickCard.BorderBrush = & $brush $color.SurfaceBorder
-    $quickCard.BorderThickness = [Windows.Thickness]::new(1)
-    $quickCard.Padding = [Windows.Thickness]::new(4)
-    $quickCard.Effect = [Windows.Media.Effects.DropShadowEffect]@{ BlurRadius=18; ShadowDepth=3; Opacity=0.22; Color=[Windows.Media.ColorConverter]::ConvertFromString($color.Shadow) }
-    $quickWindow.Content = $quickCard
-    $quickRow = [Windows.Controls.StackPanel]::new()
-    $quickRow.Orientation = [Windows.Controls.Orientation]::Horizontal
-    $quickCard.Child = $quickRow
-    $quickRow.Children.Add((& $newActionTile '摸摸' '' { & $invokePetHead; $quickWindow.Hide() } 'neutral' 34)) | Out-Null
-    $quickRow.Children.Add((& $newActionTile '喂食' '' { & $invokeFeed; $quickWindow.Hide() } 'neutral' 34)) | Out-Null
-    $quickRow.Children.Add((& $newActionTile '玩耍' '' { & $invokeBodyPlay; $quickWindow.Hide() } 'neutral' 34)) | Out-Null
-    $quickFollowTile = & $newActionTile '跟随' '' { if($script:followMode){ & $stopFollowing }else{ & $startFollowing }; $quickWindow.Hide() } 'primary' 34
-    $quickFollowText = $quickFollowTile.Tag
-    $quickRow.Children.Add($quickFollowTile) | Out-Null
+    $hideControlPanel = {
+        if ($controlWindow.IsVisible) { $controlWindow.Hide() }
+        $script:panelOutsideSince = [datetime]::MinValue
+        $script:panelGraceUntil = [datetime]::MinValue
+    }
 
-    $quickHideTimer = [Windows.Threading.DispatcherTimer]::new()
-    $quickHideTimer.Add_Tick({ $quickHideTimer.Stop(); if(-not $quickWindow.IsMouseOver){$quickWindow.Hide()} })
-    $showQuickBar = {
-        if ($script:petStatus -ne 'home' -or $controlWindow.IsVisible) { return }
-        & $updateControlPanel
-        if (-not $quickWindow.IsVisible) { $quickWindow.Show(); $quickWindow.UpdateLayout() }
+    $pointInsideWindow = {
+        param([Windows.Point]$Point, [Windows.Window]$TargetWindow)
+        if (-not $TargetWindow.IsVisible) { return $false }
+        $width = if ($TargetWindow.ActualWidth -gt 0) { $TargetWindow.ActualWidth } else { $TargetWindow.Width }
+        $height = if ($TargetWindow.ActualHeight -gt 0) { $TargetWindow.ActualHeight } else { $TargetWindow.Height }
+        return ($Point.X -ge $TargetWindow.Left -and $Point.X -le ($TargetWindow.Left + $width) -and $Point.Y -ge $TargetWindow.Top -and $Point.Y -le ($TargetWindow.Top + $height))
+    }
+
+    $panelPresenceTimer = [Windows.Threading.DispatcherTimer]::new()
+    $panelPresenceTimer.Interval = [TimeSpan]::FromMilliseconds(120)
+    $panelPresenceTimer.Add_Tick({
+        if ($script:petStatus -ne 'home' -or $script:returnHomeMode -or $script:dragging) {
+            & $hideControlPanel
+            $script:followDwellAnchor = $null
+            $script:followDwellSince = [datetime]::MinValue
+            return
+        }
+
+        $now = Get-Date
+        $cursor = & $screenToDip ([Windows.Forms.Cursor]::Position)
+        $overPet = & $pointInsideWindow $cursor $window
+        $overPanel = & $pointInsideWindow $cursor $controlWindow
+
+        if ($controlWindow.IsVisible) {
+            if ($overPet -or $overPanel -or $controlWindow.IsMouseOver -or $petImage.IsMouseOver) {
+                $script:panelOutsideSince = [datetime]::MinValue
+            } elseif ($now -ge $script:panelGraceUntil) {
+                if ($script:panelOutsideSince -eq [datetime]::MinValue) { $script:panelOutsideSince = $now }
+                elseif (($now - $script:panelOutsideSince).TotalMilliseconds -ge 550) { & $hideControlPanel }
+            }
+            return
+        }
+
+        if (-not $script:followMode) {
+            $script:followDwellAnchor = $null
+            $script:followDwellSince = [datetime]::MinValue
+            if ($overPet) { & $showControlPanel }
+            return
+        }
+
+        if ($null -eq $script:followDwellAnchor) {
+            $script:followDwellAnchor = $cursor
+            $script:followDwellSince = [datetime]::MinValue
+            return
+        }
+        $cursorDx = $cursor.X - $script:followDwellAnchor.X
+        $cursorDy = $cursor.Y - $script:followDwellAnchor.Y
+        $cursorTravel = [Math]::Sqrt(($cursorDx * $cursorDx) + ($cursorDy * $cursorDy))
+        if ($cursorTravel -gt 16) {
+            $script:followDwellAnchor = $cursor
+            $script:followDwellSince = [datetime]::MinValue
+            return
+        }
+
         $area = [Windows.SystemParameters]::WorkArea
-        $quickWindow.Left = [Math]::Min([Math]::Max($window.Left + ($window.Width-$quickWindow.ActualWidth)/2,$area.Left),$area.Right-$quickWindow.ActualWidth)
-        $quickWindow.Top = [Math]::Max($area.Top,$window.Top-$quickWindow.ActualHeight-6)
-    }
-    $quickWindow.Add_MouseEnter({ $quickHideTimer.Stop() })
-    $quickWindow.Add_MouseLeave({ $quickHideTimer.Interval=[TimeSpan]::FromMilliseconds(650); $quickHideTimer.Start() })
+        $targetX = $cursor.X + 30
+        if (($targetX + $window.Width) -gt $area.Right) { $targetX = $cursor.X - $window.Width - 30 }
+        $targetY = [Math]::Min($area.Bottom - $window.Height, $cursor.Y + 28)
+        $targetX = [Math]::Min([Math]::Max($targetX, $area.Left), $area.Right - $window.Width)
+        $targetY = [Math]::Min([Math]::Max($targetY, $area.Top), $area.Bottom - $window.Height)
+        $petDx = $targetX - $window.Left
+        $petDy = $targetY - $window.Top
+        $petCaughtUp = ([Math]::Sqrt(($petDx * $petDx) + ($petDy * $petDy)) -le 12)
+        if (-not $petCaughtUp) {
+            $script:followDwellSince = [datetime]::MinValue
+            return
+        }
+        if ($script:followDwellSince -eq [datetime]::MinValue) { $script:followDwellSince = $now; return }
+        if (($now - $script:followDwellSince).TotalSeconds -ge 5) {
+            & $showControlPanel -FromFollowDwell
+            $script:followDwellAnchor = $null
+            $script:followDwellSince = [datetime]::MinValue
+        }
+    })
 
     $absenceWindow = [Windows.Window]::new()
     $absenceWindow.Title = '菜狗不在桌面'
@@ -1445,7 +1495,7 @@ try {
         $script:followMode = $false
         $script:returnHomeMode = $false
         $animationTimer.Stop(); $ambientTimer.Stop(); $ambientStepTimer.Stop(); $moodTimer.Stop(); $needsTimer.Stop(); $followTimer.Stop(); $chaseTimer.Stop(); $returnTimer.Stop()
-        $controlWindow.Hide(); $quickWindow.Hide(); $feedbackWindow.Hide(); $window.Hide()
+        $controlWindow.Hide(); $feedbackWindow.Hide(); $window.Hide()
         if ($script:petStatus -eq 'deceased') {
             $absenceEyebrow.Text = '生命已经走到终点'
             $absenceTitle.Text = '这只菜狗不会再回来了'
@@ -1465,24 +1515,19 @@ try {
     $statusTimer.Interval = [TimeSpan]::FromSeconds(1)
     $statusTimer.Add_Tick({ if($script:petStatus -ne 'home' -and -not $script:statusHandled){ & $showAbsence } })
 
-    $petImage.ToolTip = '悬停快捷互动 · 左键直接互动 · 右键生活面板 · 双击聊天'
+    $petImage.ToolTip = '悬停打开生活面板 · 左键直接互动 · 双击聊天'
     $petImage.Add_MouseEnter({
         $duration = [Windows.Duration]::new([TimeSpan]::FromMilliseconds([double]$tokens.component.'motion-fast-ms'))
         $petScale.BeginAnimation([Windows.Media.ScaleTransform]::ScaleXProperty, [Windows.Media.Animation.DoubleAnimation]::new($petScale.ScaleX, 1.025, $duration))
         $petScale.BeginAnimation([Windows.Media.ScaleTransform]::ScaleYProperty, [Windows.Media.Animation.DoubleAnimation]::new($petScale.ScaleY, 1.025, $duration))
-        $quickHideTimer.Stop()
-        & $showQuickBar
     })
     $petImage.Add_MouseLeave({
         $duration = [Windows.Duration]::new([TimeSpan]::FromMilliseconds([double]$tokens.component.'motion-fast-ms'))
         $petScale.BeginAnimation([Windows.Media.ScaleTransform]::ScaleXProperty, [Windows.Media.Animation.DoubleAnimation]::new($petScale.ScaleX, 1, $duration))
         $petScale.BeginAnimation([Windows.Media.ScaleTransform]::ScaleYProperty, [Windows.Media.Animation.DoubleAnimation]::new($petScale.ScaleY, 1, $duration))
-        $quickHideTimer.Interval = [TimeSpan]::FromMilliseconds(850)
-        $quickHideTimer.Start()
     })
     $petImage.Add_MouseRightButtonUp({
         param($sender,$eventArgs)
-        & $toggleControlPanel
         $eventArgs.Handled = $true
     })
     $petImage.Add_MouseLeftButtonDown({
@@ -1555,10 +1600,11 @@ try {
         $moodTimer.Start()
         $ambientTimer.Start()
         $needsTimer.Start()
+        if (-not $SelfTest) { $panelPresenceTimer.Start() }
         if (-not $SelfTest) {
             & $scheduleNextNudge 40 76
             & $saveState
-            if ($OpenPanel) { & $toggleControlPanel }
+            if ($OpenPanel) { & $showControlPanel }
         }
     })
     $window.Add_Closed({
@@ -1571,12 +1617,11 @@ try {
         $needsTimer.Stop()
         $chaseTimer.Stop()
         $followTimer.Stop()
-        $quickHideTimer.Stop()
+        $panelPresenceTimer.Stop()
         $statusTimer.Stop()
         & $saveState
         $feedbackWindow.Close()
         $controlWindow.Close()
-        $quickWindow.Close()
         $absenceWindow.Close()
     })
 
@@ -1594,7 +1639,19 @@ try {
             $staticRestOk = (-not $animationTimer.IsEnabled)
             $hqFramesOk = ($script:frames.Count -eq 12 -and $script:frames['sleeping'].Count -eq 2 -and $script:frames['failed'].Count -ge 6)
             $modernFeedbackOk = ($feedbackCard.CornerRadius.TopLeft -ge 16 -and $feedbackCard.Effect.BlurRadius -ge 18)
-            $modernPanelOk = ($controlCard.CornerRadius.TopLeft -ge 20 -and $controlCard.Width -ge 320 -and $statWidgets.Count -eq 4 -and $actionGrid.Children.Count -eq 4 -and $quickRow.Children.Count -eq 4 -and $null -eq $petImage.ContextMenu)
+            $modernPanelOk = ($controlCard.CornerRadius.TopLeft -ge 20 -and $controlCard.Width -ge 320 -and $statWidgets.Count -eq 4 -and $actionGrid.Children.Count -eq 4 -and $controlGrid.Children.Count -eq 3 -and $null -eq $petImage.ContextMenu)
+            $script:followMode = $false
+            & $showControlPanel
+            $normalHoverPanelOk = $controlWindow.IsVisible
+            & $hideControlPanel
+            $script:followMode = $true
+            & $showControlPanel
+            $followHoverSuppressedOk = (-not $controlWindow.IsVisible)
+            & $showControlPanel -FromFollowDwell
+            $followDwellPanelOk = $controlWindow.IsVisible
+            & $hideControlPanel
+            $script:followMode = $false
+            $hoverPanelOk = ($normalHoverPanelOk -and $followHoverSuppressedOk -and $followDwellPanelOk)
             $allAmbientNames = @($ambientRoutineNames) + @($sleepRoutineNames)
             $ambientPlansOk = ($allAmbientNames.Count -eq 33 -and @($allAmbientNames | Select-Object -Unique).Count -eq 33 -and $quietRoutineNames.Count -eq 15 -and $activeRoutineNames.Count -eq 15)
             $naturalScheduleOk = ($ambientTimer.Interval.TotalSeconds -eq 5 -and $script:activityPhaseEndsAt -gt (Get-Date).AddMinutes(1) -and $script:nextAmbientAt -gt (Get-Date).AddSeconds(20))
@@ -1679,7 +1736,7 @@ try {
             $followTimer.Stop()
             $nudgeWindowOk = ($script:nextNudgeAt -gt (Get-Date).AddMinutes(39))
             $persistenceOk = $statePath.EndsWith('state.json')
-            $script:selfTestResult = "SELF_TEST_OK renderer=WPF hqFrames=$hqFramesOk modernFeedback=$modernFeedbackOk modernPanel=$modernPanelOk ambientRoutines=$($allAmbientNames.Count) ambientVariety=$ambientPlansOk naturalSchedule=$naturalScheduleOk naturalStart=$naturalStartOk staticRest=$staticRestOk interactions=$baseInteractions interactionLogic=$interactionOk affectionCanDecrease=$affectionCanDecrease lifeSystem=$lifeSystemOk departureReachable=$departureReachable followMode=$followModeOk nudgeWindow=$nudgeWindowOk persistence=$persistenceOk"
+            $script:selfTestResult = "SELF_TEST_OK renderer=WPF hqFrames=$hqFramesOk modernFeedback=$modernFeedbackOk modernPanel=$modernPanelOk hoverPanel=$hoverPanelOk ambientRoutines=$($allAmbientNames.Count) ambientVariety=$ambientPlansOk naturalSchedule=$naturalScheduleOk naturalStart=$naturalStartOk staticRest=$staticRestOk interactions=$baseInteractions interactionLogic=$interactionOk affectionCanDecrease=$affectionCanDecrease lifeSystem=$lifeSystemOk departureReachable=$departureReachable followMode=$followModeOk nudgeWindow=$nudgeWindowOk persistence=$persistenceOk"
             $window.Close()
         })
         $testTimer.Start()
