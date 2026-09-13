@@ -37,8 +37,11 @@ if (Test-Path -LiteralPath $manifestPath) {
 
 if (Test-Path -LiteralPath $scriptPath) {
     $scriptText = Get-Content -Raw -LiteralPath $scriptPath
-    foreach ($feature in 'state.json','petting','feeding','sleeping','feedbackCard','nextNudgeAt','ignoredNudges','petCooldownUntil','lastBondDecay','affectionCanDecrease','BitmapScalingMode','assets-hq','ambientRoutineNames','ambientTimer','activityPhase','cursor-curious','dream-twitch','wake-stretch','holdState','health','stamina','petStatus','departureReason','controlWindow','panelPresenceTimer','showControlPanel','followDwellSince','followMode','stopFollowing','returnHomeMode') {
+    foreach ($feature in 'state.json','petting','feeding','sleeping','feedbackCard','nextNudgeAt','ignoredNudges','petCooldownUntil','lastBondDecay','affectionCanDecrease','BitmapScalingMode','assets-hq','ambientRoutineNames','ambientTimer','activityPhase','cursor-curious','dream-twitch','wake-stretch','holdState','health','stamina','petStatus','departureReason','controlWindow','panelPresenceTimer','showControlPanel','followDwellSince','followMode','stopFollowing','returnHomeMode','休息片刻') {
         if ($scriptText -notmatch [regex]::Escape($feature)) { $errors.Add("缺少成熟互动机制：$feature") }
+    }
+    foreach ($externalChatPattern in 'OpenAI\.[Cc]odex','open[Cc]odex','suppressNextClick','打开\s+[Cc]odex') {
+        if ($scriptText -match $externalChatPattern) { $errors.Add("仍包含外部聊天应用入口：$externalChatPattern") }
     }
 }
 

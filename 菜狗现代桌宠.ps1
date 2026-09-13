@@ -273,7 +273,6 @@ try {
     $script:dragMoved = $false
     $script:dragOffset = [Windows.Point]::new(0, 0)
     $script:dragStartedAt = [datetime]::MinValue
-    $script:suppressNextClick = $false
     $script:chaseMode = $false
     $script:chaseTicks = 0
     $script:followMode = $false
@@ -839,8 +838,6 @@ try {
         & $scheduleNextNudge 40 76
     }
 
-    $openCodex = { Start-Process -FilePath "$env:WINDIR\explorer.exe" -ArgumentList 'shell:AppsFolder\OpenAI.Codex_2p2nqsd0c76g0!App' }
-
     $invokePetHead = {
         & $markInteraction
         $script:interactionCount++
@@ -1325,7 +1322,12 @@ try {
     } 'neutral' 38
     $quietTileText = $quietTile.Tag
     $controlGrid.Children.Add($quietTile) | Out-Null
-    $controlGrid.Children.Add((& $newActionTile '打开 Codex' '' { & $markInteraction; & $showBriefState 'waving' 1200; & $openCodex } 'neutral' 38)) | Out-Null
+    $controlGrid.Children.Add((& $newActionTile '休息片刻' '' {
+        & $stopAmbientRoutine
+        & $enterActivityPhase 'sleep'
+        & $holdState 'sleeping'
+        $controlWindow.Hide()
+    } 'neutral' 38)) | Out-Null
 
     $sizeLabel = & $newPanelText '显示大小' 10.5 'SemiBold' 'muted'
     $sizeLabel.Margin = [Windows.Thickness]::new(3,12,0,4)
@@ -1565,15 +1567,6 @@ try {
     })
     $petImage.Add_MouseLeftButtonDown({
         param($sender, $eventArgs)
-        if ($eventArgs.ClickCount -ge 2) {
-            $script:suppressNextClick = $true
-            & $markInteraction
-            & $showBriefState 'waving' 1200
-            & $showFeedback '一起去聊天' '我会在 Codex 里继续陪你。' 'positive' 0 0 0 2200
-            & $openCodex
-            $eventArgs.Handled = $true
-            return
-        }
         $script:dragging = $true
         $script:dragMoved = $false
         $script:dragOffset = $eventArgs.GetPosition($window)
@@ -1592,7 +1585,6 @@ try {
     $petImage.Add_MouseLeftButtonUp({
         param($sender, $eventArgs)
         $petImage.ReleaseMouseCapture()
-        if ($script:suppressNextClick) { $script:suppressNextClick = $false; $script:dragging = $false; return }
         $wasMoved = $script:dragMoved
         $script:dragging = $false
         if ($wasMoved) {
